@@ -1,0 +1,10 @@
+[custom.all.istream]
+type = "local"
+path = "."
+ipkg = "istream.ipkg"
+test = "test/test.ipkg"
+
+[custom.all.istream-test]
+type = "local"
+path = "test"
+ipkg = "test.ipkg"
