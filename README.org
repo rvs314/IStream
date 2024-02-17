@@ -1,3 +1,5 @@
-#+title: IStreams
-#+subtitle: Iterlacing Streams
+#+title: IStreams: Interlacing Streams
+
+This is an implementation of the biased, interlacing streams from Kisleyov, Shan, Friedman and Sabry's paper "Backtracking, Interleaving, and Terminating Monad Transformers". 
+
 
