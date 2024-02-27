@@ -66,20 +66,24 @@ toList x        (y :: z) = y :: toList x z
 toList (More x) (Wait y) = toList x y
 toList Dry      y        = []
 
-mapApp : (a -> b) -> IStream a -> IStream b -> IStream b
+||| Equivalent to `map f as ++ bs`
+mapApp : (fn : a -> b) -> (as :IStream a) -> (bs : IStream b) -> IStream b
 mapApp f (x :: z) y = f x :: mapApp f z y
 mapApp f [] y       = y
 mapApp f (Wait x) y = Wait (mapApp f x y)
 
+||| Append two streams together head-to-tail
+public export
+(++) : IStream a -> IStream a -> IStream a
+(++) = mapApp id
+
 public export
 Semigroup (IStream a) where
-  (x :: y) <+> ys = x :: (y <+> ys)
-  [] <+> ys       = ys
-  (Wait x) <+> ys = Wait (x <+> ys)
+  (<+>) = (++)
 
 public export
 Functor IStream where
-  map f k = mapApp f k []
+  map s f = mapApp s f []
 
 public export
 Applicative IStream where
@@ -95,13 +99,24 @@ Monad IStream where
   []       >>= fasb = []
   (Wait x) >>= fasb = Wait (x >>= fasb)
 
+||| The interlacing operation
+||| First, it collects elements of the left stream until it's
+||| forced to wait. Then, it collects elements of the right stream
+||| until it's forced to wait. 
+||| For two completely forced streams, this is equivalent to (++), 
+||| but for completely lazy streams, this is equivalent to 
+||| merging the streams element-wise
+public export
+interlace : IStream a -> IStream a -> IStream a
+interlace (x :: y) r = x :: (interlace y r)
+interlace []       r = r
+interlace (Wait x) r = Wait (interlace r x)
+
 public export
 Alternative IStream where
   empty = []
 
-  (x :: y) <|> r = x :: (y <|> r)
-  []       <|> r = r
-  (Wait x) <|> r = r <|> x
+  l <|> r = interlace l r
 
 public export
 Zippable IStream where
@@ -126,3 +141,14 @@ Zippable IStream where
   unzipWith3 fabcd as = let (bs, cds) = unzipWith fabcd as
                             (cs, ds)  = unzip cds
                         in (bs, cs, ds)
+
+public export
+Show a => Show (IStream a) where
+  show k = "[" ++ continued k
+    where 
+      continued : IStream a -> String
+      continued (z :: (w :: v)) = show z ++ ", " ++ continued (w :: v)
+      continued (z :: []) = show z ++ "]"
+      continued (z :: (Wait w)) = show z ++ ", ...]"
+      continued [] = "]"
+      continued (Wait z) = "...]"
