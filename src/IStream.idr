@@ -66,16 +66,12 @@ toList x        (y :: z) = y :: toList x z
 toList (More x) (Wait y) = toList x y
 toList Dry      y        = []
 
-||| Equivalent to `map f as ++ bs`
-mapApp : (fn : a -> b) -> (as :IStream a) -> (bs : IStream b) -> IStream b
-mapApp f (x :: z) y = f x :: mapApp f z y
-mapApp f [] y       = y
-mapApp f (Wait x) y = Wait (mapApp f x y)
-
 ||| Append two streams together head-to-tail
 public export
 (++) : IStream a -> IStream a -> IStream a
-(++) = mapApp id
+(x :: y) ++ rs = x :: (y ++ rs)
+[]       ++ rs = rs
+(Wait x) ++ rs = Wait (x ++ rs)
 
 public export
 Semigroup (IStream a) where
@@ -83,21 +79,25 @@ Semigroup (IStream a) where
 
 public export
 Functor IStream where
-  map s f = mapApp s f []
+  map s (x :: y) = s x :: map s y
+  map s []       = []
+  map s (Wait x) = Wait (map s x)
+
+public export
+flatten : IStream (IStream a) -> IStream a
+flatten (x :: y) = x <+> flatten y
+flatten []       = []
+flatten (Wait x) = Wait $ flatten x
 
 public export
 Applicative IStream where
   pure x = [x]
 
-  (x :: y) <*> k = mapApp x k (y <*> k)
-  []       <*> k = []
-  (Wait x) <*> k = Wait (x <*> k)
+  fs <*> k = flatten $ map (\f => map f k) fs
 
 public export
 Monad IStream where
-  (x :: y) >>= fasb = fasb x <+> (y >>= fasb)
-  []       >>= fasb = []
-  (Wait x) >>= fasb = Wait (x >>= fasb)
+  xs >>= f = flatten $ map f xs
 
 ||| The interlacing operation
 ||| First, it collects elements of the left stream until it's
@@ -108,9 +108,11 @@ Monad IStream where
 ||| merging the streams element-wise
 public export
 interlace : IStream a -> IStream a -> IStream a
-interlace (x :: y) r = x :: (interlace y r)
-interlace []       r = r
-interlace (Wait x) r = Wait (interlace r x)
+interlace []       r        = r
+interlace l        []       = l
+interlace (x :: y) r        = x :: (interlace y r)
+interlace l        (y :: z) = y :: interlace l z
+interlace (Wait x) (Wait y) = Wait (interlace x y)
 
 public export
 Alternative IStream where
@@ -147,8 +149,7 @@ Show a => Show (IStream a) where
   show k = "[" ++ continued k
     where 
       continued : IStream a -> String
-      continued (z :: (w :: v)) = show z ++ ", " ++ continued (w :: v)
       continued (z :: []) = show z ++ "]"
-      continued (z :: (Wait w)) = show z ++ ", ...]"
+      continued (z :: rst) = show z ++ ", " ++ continued rst
       continued [] = "]"
       continued (Wait z) = "...]"
